@@ -11,6 +11,7 @@ import requests, pandas, lxml
 from lxml import html
 from fredapi import Fred
 import pandas as pd
+import quandl
 
 """
 .. module:: finmktfunctions.py
@@ -147,8 +148,48 @@ def fredSeries(Series,start,end,df='',API_KEY_FRED='',save=False,savedir='.'):
     return df
 
 
+def peapply(row):
+    if np.isnan(row['PE']):
+        return row['Close']/row['Earnings']
+    else:
+        return row['PE']
 
-def yfgetappend(symbol,start,end,df='',save=False,savedir='.'):
+def quandl_sppegetappend(dfsppe,dfsp500,quandl_api_key, start_date, end_date, save=False,savedir='./'):
+
+    data=quandl.get("MULTPL/SP500_PE_RATIO_MONTH", authtoken=quandl_api_key, start_date=start_date, end_date=end_date)
+ 
+    df_data=pd.DataFrame(data)
+    df_data.columns=['PE']
+    df_sppe=pd.concat([dfsppe,df_data])
+
+    df_sppe=df_sppe[~df_sppe.index.duplicated(keep='first')]
+    df_sppe.sort_index(inplace=True, ascending=True)
+    
+    df_sppe_daily=dfsp500.join(df_sppe,how='left')
+    df_sppe_daily['Earnings']=df_sppe_daily['Close']/df_sppe['PE']
+    df_sppe_daily['Earnings']=df_sppe_daily['Earnings'].ffill()
+    df_sppe_daily['PE']=df_sppe_daily.apply(peapply,axis=1)
+
+
+    #df_sppe_daily.loc[dt.datetime(2020,7,30):dt.datetime(2020,8,3)]
+    #df_sppe_daily.sort_index(inplace=True, ascending=True)
+    #filename="./data/sp500_sp500_pe_ratio_daily_1950-1-3_to_2020-8-4.csv"
+#df_sppe_daily.to_csv()
+
+
+    if save==True:
+        s=df_sppe_daily.index[0]
+        e=df_sppe_daily.index[len(df_sppe_daily.index)-1]
+        filename='sp500_pe_daily_'+str(s.year)+'-'+str(s.month)+'-'+str(s.day)
+        filename=savedir+'/'+filename+'_to_'+str(e.year)+'-'+str(e.month)+'-'+str(e.day)+'.csv'
+        print("df to csv, filename = ",filename)
+        #df_sppe_daily[['PE','Earnings']].reset_index().to_csv(filename,index=False)
+
+
+
+    return df_sppe_daily[['PE','Earnings']]
+
+def yahoof_getappend(symbol,start,end,df='',save=False,savedir='./'):
 
     """
 
@@ -292,22 +333,7 @@ def fmjoinff(dfmarket,dflei,joincols='',market_variables='close_price',verbose=F
 
     return dfmarket
 
-# US Recessions
-#xhttps://en.wikipedia.org/wiki/List_of_recessions_in_the_United_States
-def get_recessions():
-    recessions=[(dt.datetime(1953,7,1),dt.datetime(1954,5,1)),
-        (dt.datetime(1957,7,1),dt.datetime(1958,4,1)),
-        (dt.datetime(1960,4,1),dt.datetime(1961,2,1)),
-        (dt.datetime(1969,12,1),dt.datetime(1970,11,1)),
-        (dt.datetime(1973,11,1),dt.datetime(1975,3,1)),
-        (dt.datetime(1980,1,1),dt.datetime(1980,7,1)),
-        (dt.datetime(1981,7,1),dt.datetime(1982,11,1)),
-        (dt.datetime(1990,7,1),dt.datetime(1991,3,1)),
-        (dt.datetime(2001,3,1),dt.datetime(2001,11,1)),
-        (dt.datetime(2007,12,1),dt.datetime(2009,6,1)),
-        (dt.datetime(2020,3,1),dt.datetime(2020,4,13))
-      ]
-    return recessions
+
 
 
 # ADX - average directional index

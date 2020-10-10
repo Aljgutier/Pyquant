@@ -34,6 +34,7 @@ def format_date(date_datetime):
      date_int = int(date_mktime)
      date_str = str(date_int)
      return date_str
+
 def subdomain(symbol, start, end, filter='history'):
      subdoma="/quote/{0}/history?period1={1}&period2={2}&interval=1d&filter={3}&frequency=1d"
      subdomain = subdoma.format(symbol, start, end, filter)
@@ -90,7 +91,7 @@ def scrape_page(url, header):
 #     price_history = scrape_page(url, header)
 
 
-def fredSeries(Series,start,end,df='',API_KEY_FRED='',save=False,savedir='.'):
+def fred_getappend(Series,start,end,df='',API_KEY_FRED='',save=False,savedir='.'):
 
     """
 
@@ -148,13 +149,13 @@ def fredSeries(Series,start,end,df='',API_KEY_FRED='',save=False,savedir='.'):
     return df
 
 
-def peapply(row):
+def _peapply(row):
     if np.isnan(row['PE']):
         return row['Close']/row['Earnings']
     else:
         return row['PE']
 
-def quandl_sppegetappend(dfsppe,dfsp500,quandl_api_key, start_date, end_date, save=False,savedir='./'):
+def quandl_sppe_getappend(dfsppe,dfsp500,quandl_api_key, start_date, end_date, save=False,savedir='./'):
 
     data=quandl.get("MULTPL/SP500_PE_RATIO_MONTH", authtoken=quandl_api_key, start_date=start_date, end_date=end_date)
  
@@ -168,7 +169,7 @@ def quandl_sppegetappend(dfsppe,dfsp500,quandl_api_key, start_date, end_date, sa
     df_sppe_daily=dfsp500.join(df_sppe,how='left')
     df_sppe_daily['Earnings']=df_sppe_daily['Close']/df_sppe['PE']
     df_sppe_daily['Earnings']=df_sppe_daily['Earnings'].ffill()
-    df_sppe_daily['PE']=df_sppe_daily.apply(peapply,axis=1)
+    df_sppe_daily['PE']=df_sppe_daily.apply(_peapply,axis=1)
 
 
     #df_sppe_daily.loc[dt.datetime(2020,7,30):dt.datetime(2020,8,3)]
@@ -177,19 +178,23 @@ def quandl_sppegetappend(dfsppe,dfsp500,quandl_api_key, start_date, end_date, sa
 #df_sppe_daily.to_csv()
 
 
+
     if save==True:
         s=df_sppe_daily.index[0]
         e=df_sppe_daily.index[len(df_sppe_daily.index)-1]
         filename='sp500_pe_daily_'+str(s.year)+'-'+str(s.month)+'-'+str(s.day)
         filename=savedir+'/'+filename+'_to_'+str(e.year)+'-'+str(e.month)+'-'+str(e.day)+'.csv'
         print("df to csv, filename = ",filename)
-        #df_sppe_daily[['PE','Earnings']].reset_index().to_csv(filename,index=False)
+
+
+
+        df_sppe_daily[['PE','Earnings']].reset_index().to_csv(filename,index=False)
 
 
 
     return df_sppe_daily[['PE','Earnings']]
 
-def yahoof_getappend(symbol,start,end,df='',save=False,savedir='./'):
+def yahoo_getappend(symbol,start,end,df='',save=False,savedir='./'):
 
     """
 
@@ -249,13 +254,13 @@ def yahoof_getappend(symbol,start,end,df='',save=False,savedir='./'):
 # Yield Curve 
 #joincols=['gdp', 'gdp_qoq', 'gdp_prevqoq','recession1q' ,'recession2q']
 # Join Financial Time Series, Fill Forward
-def fmjoinff(dfmarket,dflei,joincols='',market_variables='close_price',verbose=False,dropnas=True):
+def fmjoinff(dfleft,dfright,market_cols=['Close'],verbose=False,dropnas=True):
     """
     Financial Time Series Join Fill Forward
 
     **Parameters**:
         dfmarket (dataframe): of X, independent variable colums.
-        dflei (dataframe): of Y, dependent variable.
+        dfjoin (dataframe): data frame to join
         joincols (String):  No. of training days for each prediction. 
         market_variable (String):  test start time
         verbose (boolean):  test end time
@@ -291,47 +296,39 @@ def fmjoinff(dfmarket,dflei,joincols='',market_variables='close_price',verbose=F
     #   fill forward
     #   remove any non market dates ... dates corresponding to close_price null/NaN
 
-    if joincols=='':
-        joincols=df.columns
+
+    dfjoined=dfleft.join(dfright,lsuffix='l',rsuffix='r', how='outer')
 
 
-
-    print("join columns =",joincols)
-    dfmarket=dfmarket.join(dflei[joincols],lsuffix='l',rsuffix='r', how='outer')
-
-
-
-    for v in joincols:
-        if (not is_numeric_dtype(dfmarket[v])):
+    for v in dfright.columns:
+        if (not is_numeric_dtype(dfjoined[v])):
             if verbose:
                 print('... the variable',v,' is not numeric, convert to numeric')
-            dfmarket[v] = pd.to_numeric(dfmarket[v],errors='coerce')
+            dfjoined[v] = pd.to_numeric(dfjoined[v],errors='coerce')
 
 
-    # fill forward since the LEI update occurs early and needs to be carried forwarde
-    dfmarket.loc[:, joincols] = dfmarket[joincols].ffill() 
+    # fill forward 
+    dfjoined = dfjoined.ffill() 
 
     # Nulls
     # tail rows with null close_price ... verify that these are non market dates
     if verbose:
-        print('Market Variable Nulls:',dfmarket[market_variables][dfmarket[market_variables].isnull()].tail(5))
+        print('Nulls:',dfjoined[dfjoined.isnull()].tail(5))
         
    
    # drop non market dates
     if dropnas:
         if verbose:
-            print('\nDrop non market dates (dropna) ... ')
-        dfmarket = dfmarket.dropna(subset=market_variables) 
+            print('\nDrop non market dates, NAs in Market Columns... ',market_cols)
+        dfjoined = dfjoined.dropna(subset=market_cols) 
 
 
     if verbose:
-        print('\nMarket Variable Nulls =\n' ,dfmarket[market_variables].isnull().sum())
-        print('\nAll Join Variable Nulls =\n' ,dfmarket[joincols].isnull().sum())  
-        print('\nJoin variable nulls after start of join series\n',dfmarket.loc[dflei.index[0]:,joincols].isnull().sum())
+        print('\nNulls =\n' ,dfjoined.isnull().sum())
         # Display the Dataframe
-        display(dfmarket.tail(3))
+        display(dfjoined.tail(3))
 
-    return dfmarket
+    return dfjoined
 
 
 
@@ -467,6 +464,8 @@ def dflogretstd(df,v,windows):
         # * np.sqrt(w)
 
     # returns v_lrstdw
+
+    df.drop('logret',axis=1,inplace=True)
     return df
 
 
@@ -483,6 +482,29 @@ def dfstd(df,v,windows):
 
     # returns new columns with v_stdw
     return df
+
+
+def dfvelocity(df,v,windows=1):
+
+    if not isinstance(windows, list):
+        windows=[windows]
+
+
+    v_d1 = str(v)+'_d1'
+    df[v_d1] = df[v]-df[v].shift(1) # 1st difference
+
+
+    for w in windows:
+        v_avgvel = v + '_avgvel' + str(w)
+        if w == 1:
+            df[v_avgvel] = df[v_d1]
+        else:
+            df[v_avgvel] = df[v_d1].rolling(window=w).mean()
+
+        # * np.sqrt(w)
+    df.drop(v_d1,axis=1,inplace=True)
+    # returns new columns with v_stdw
+    return df   
 
 
 def dfadx(df,v_todayClose,v_todayHigh,v_todayLow,window=14):
@@ -538,17 +560,20 @@ def dfadx(df,v_todayClose,v_todayHigh,v_todayLow,window=14):
     
     df['ADX'] = 100 * df['ema_abs_PDImNDI']/(df[pdi]+df[ndi])
     
+    drop_cols=['truerange', pdm,ndm,atr,emaPDM,emaNDM,'moveDown','moveUp','ema_abs_PDImNDI', 
+    'absPDImNDI','yesterday_HighPrice','yesterday_closePrice', 'yesterday_lowPrice']
+    df.drop( drop_cols, axis=1,inplace=True)
     return df
 
 
 # GDP Functions
-def gdp_recession1q(gdpqoq):
+def _gdp_recession1q(gdpqoq):
     if (gdpqoq < 0):
         return 1
     else:
         return 0
 
-def gdp_recession2q(gdpqoq, gdpqoqprev):
+def _gdp_recession2q(gdpqoq, gdpqoqprev):
     if ((gdpqoq < 0) and (gdpqoqprev < 0)):
         return 1
     else:
@@ -558,8 +583,8 @@ def gdpqoq(df,vn_gdp):
     df['gdp_prevq']=df[vn_gdp].shift(1)
     df['gdp_qoq']=100*(df[vn_gdp]/df['gdp_prevq']-1)
     df['gdp_prevqoq']=df['gdp_qoq'].shift(1)
-    df['recession1q']=df.apply(lambda row: gdp_recession1q(row['gdp_qoq']),axis=1)
-    df['recession2q']=df.apply(lambda row: gdp_recession2q(row['gdp_qoq'],row['gdp_prevqoq']),axis=1)
+    df['recession1q']=df.apply(lambda row: _gdp_recession1q(row['gdp_qoq']),axis=1)
+    df['recession2q']=df.apply(lambda row: _gdp_recession2q(row['gdp_qoq'],row['gdp_prevqoq']),axis=1)
     return df
 
 # Month over Month CPI
@@ -584,6 +609,7 @@ def cpimom(df,v):
     df['cpimom']=100*(df[v]/df['lastmonth'] - 1)
     df['cpimom_lastmonth']=df['cpimom'].shift(1)
     df['cpimomvelocity']=df['cpimom']-df['cpimom_lastmonth']
+    df.drop('lastmonth',axis=1)
     return df
 
 

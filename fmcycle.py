@@ -14,7 +14,7 @@ import time
 
 """
 
-def get_market_cycles(df='',compute=0,symbol='mcycle',variable='Close',mc_filename='',mcs_filename='',mcdown_p=20,mcup_p=21,initmarket=1,save=1,v=1,savedir='./'):
+def fmcycles(df='',compute=0,symbol='mcycle',variable='Close',mc_filename='',mcs_filename='',mcdown_p=20,mcup_p=21,initmarket=1,save=1,v=1,savedir='./'):
 
     """
 
@@ -44,9 +44,9 @@ def get_market_cycles(df='',compute=0,symbol='mcycle',variable='Close',mc_filena
 
                 **mkt**  = 1 for market up cycle ("Bull"), = 0 for market down cycle ("Bear").
 
-                **startTime** = start date of the market cycle
+                **startDate** = start date of the market cycle
 
-                **endTime** = end date of the market cycle
+                **endDate** = end date of the market cycle
 
                 **startPrice** = price of the markket variable, on startdate
 
@@ -92,6 +92,8 @@ def get_market_cycles(df='',compute=0,symbol='mcycle',variable='Close',mc_filena
 
     #lastdate=df.index[len(df.index)-1]
  
+    dfmc_cols=['Close','High','Low','Open','Volume','Adj Close','mkt','mcupm','mcnr','mucdown','mdcup']
+
     if save==1: # note, only save if compute == 1
         lastdate=df.index[len(df.index)-1]           # save market cycle
         startdate=df.index[0] 
@@ -99,9 +101,12 @@ def get_market_cycles(df='',compute=0,symbol='mcycle',variable='Close',mc_filena
         save_dfmcs_filename=savedir+'/'+symbol+'_dfmcs'+str(mcdown_p)+str(mcup_p)+'_'+str(startdate.year)+'_'+str(lastdate.year)+'-'+str(lastdate.month)+'-'+str(lastdate.day)+'.csv'
         print('save dfmc file: ',save_dfmc_filename)
         print('save dfmcs file:',save_dfmcs_filename)
-        dfmc.to_csv(save_dfmc_filename)
+        dfmc[dfmc_cols].to_csv(save_dfmc_filename)
         dfmcsummary.to_csv(save_dfmcs_filename)
-    return dfmc, dfmcsummary
+
+
+    
+    return dfmc[dfmc_cols], dfmcsummary
 
 
 def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
@@ -139,7 +144,7 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
     # newmlm := new market low marker
     index=dfmc.index[0]
     #print("index = ",index)
-    dfmcsummary = pd.DataFrame({'mkt': [], 'startTime': [], 'endTime': [], 'startPrice': [], 'endPrice': [], 'mcnr': []}, index=[])
+    dfmcsummary = pd.DataFrame({'mkt': [], 'startDate': [], 'endDate': [], 'startDate': [], 'endDate': [], 'mcnr': []}, index=[])
 
 
     mdclowtime = df.index[0]
@@ -157,7 +162,7 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
     newhlm=0
 
 
-    lastEndTime = dfmc.index[0]
+    lastEndDate = dfmc.index[0]
     lastEndPrice = dfmc.loc[dfmc.index[0]]
     st = dfmc.index[0]
     et = dfmc.index[0]
@@ -169,9 +174,7 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
     n=0
     updatecols=['newmhlm','mdclp','mucdown','mdcup', 'mcupm','muc','mdc']
     for i in dfmc.index:
-        #date = df.ix[i].name
         date = i
-        #price = df.ix[i, 0]
         price =df.loc[i,mcpricevariable]
 
 
@@ -182,8 +185,6 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
                     mdclowtime, mdchigh, mdchightime)
         n=1
 
-        #dfmc.loc[i,'newmhlm']=newmhlm
-        #dfmc.loc[i, 'mcudthr'] = mcudthr
         dfmc.loc[i,'mucdown']= mucdown
         dfmc.loc[i,'mdcup']=mdcup
         dfmc.loc[i, 'mcupm'] = mcupm
@@ -191,20 +192,17 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
         dfmc.loc[i,'muc'] = muc
 
 
-
         if switch == 1:
-            d = {'mkt': [lastMarket],'startTime': [st], 'endTime': [et], 'startPrice': [sp], 'endPrice': [ep] }
+            d = {'mkt': [lastMarket],'startDate': [st], 'endDate': [et], 'startPrice': [sp], 'endPrice': [ep] }
             if v == 1:
                 print('  ... mkt:', lastMarket,'Start:', st, 'Price:', sp,'End:', et,'Price', ep)
             lastMarket = -1 * lastMarket
             dftmp = pd.DataFrame(d, index=[st])
-            lastEndTime = et
+            lastEndDate = et
             lastEndPrice = ep
             dfmcsummary = dfmcsummary.append(dftmp,sort=False)
             dfmc.loc[st, 'mchlm'] = 1
             dfmc.loc[et, 'mchlm'] = 1
-
-            #print('last_mcupm=', last_mcupm, 'mcupm =',mcupm)
 
 
         # fill in dfmc with
@@ -219,24 +217,20 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
             dfmc.loc[i, 'mchlm']=0
 
 
-        #h2Price = h1Price
-        #h1Price = dfmc.loc[i,mcpricevariable]
-
     ##### LOOP IS DONE ####
     #print(df mcsummary)
     # After the loop is complete, in most cases there will not be a switch detected at the end time,
     #   thus the tail end of the market will not be represented in the summary
-    #   so, update dfmcsummary with the latest data ... include startTime, startPrice, endTime, endPrice
+    #   so, update dfmcsummary with the latest data ... include startDate, startPrice, endDate, endPrice
     if switch == 0:
         if muc == 1:
             mkt = 1
         else:
             mkt = -1
-        #d = {'mkt': [mkt],'startTime': [lastEndTime], 'endTime': [date], 'startPrice': [lastEndPrice], 'endPrice': [ dfmc.loc[dfmc.index[dfmc.index.size-1], mcpricevariable] ] }
-        d = {'mkt': [mkt],'startTime': [lastEndTime], 'endTime': [None], 'startPrice': [lastEndPrice], 'endPrice':  None }
+        d = {'mkt': [mkt],'startDate': [lastEndDate], 'endDate': [None], 'startPrice': [lastEndPrice], 'endPrice':  None }
         if v == 1:
-            print('  ... mkt:', mkt,'Start:', lastEndTime, 'Price:', lastEndPrice,'End:', None,'Price', None )
-        dftmp = pd.DataFrame(d, index = [lastEndTime])
+            print('  ... mkt:', mkt,'Start:', lastEndDate, 'Price:', lastEndPrice,'End:', None,'Price', None )
+        dftmp = pd.DataFrame(d, index = [lastEndDate])
 
         dfmcsummary = dfmcsummary.append(dftmp,sort=False)
 
@@ -248,7 +242,7 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
         lastMkt = 1
     elif initialMarket == -1:
         lastMkt = -1
-    #dfmc.loc[dfmc.index[0], ['mkt']] = lastMkt
+
     mcStartPrice = float(dfmc.loc[dfmc.index[0], mcpricevariable])
 
     lastMkt = initialMarket
@@ -257,20 +251,16 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
 
         mcnr=float(dfmc.loc[i, mcpricevariable]) / mcStartPrice - 1
         dfmc.loc[i,['mcnr']] = mcnr
-        #
-        #print(i, lastMkt,dfmc.loc[i,'mchlm'] )
+
         if dfmc.loc[i,'mchlm'] == 1 and lastMkt == 1:
-            #     sprint(i)
             if i != dfmc.index[0]:
                 lastMkt = -1
             mcStartPrice = float(dfmc.loc[i,mcpricevariable])
-            #print(lastMkt)
+
         elif dfmc.loc[i,'mchlm'] == 1 and lastMkt == -1:
-            #print(i)
             if i != dfmc.index[0]:
                 lastMkt = 1
             mcStartPrice = float(dfmc.loc[i,mcpricevariable])
-            #print(lastMkt)
 
     # Add normalized Returns to dfmcsummary
 
@@ -278,11 +268,12 @@ def _market_cycles(df,initMarket,mcpricevariable,mcdown_p,mcup_p,v):
     for i in dfmcsummary.index:
         # https://docs.python.org/3/tutorial/errors.html
         try:
-            dfmcsummary.loc[i, ['mcnr']] = dfmc.loc[dfmcsummary.loc[i,'endTime'], 'mcnr']
+            dfmcsummary.loc[i, ['mcnr']] = dfmc.loc[dfmcsummary.loc[i,'endDate'], 'mcnr']
         # will get a type error on the very last call, because reality is the last day is in mid cycle
         #  and in that case the end time is "None" so the indexing will through a TypeError
         except KeyError:
             pass
+
 
     return (dfmc, dfmcsummary)
 
@@ -317,110 +308,85 @@ def _marketCycleLogic(n,price,date,mcupm, mcdp,mcup,muc,muclow,muclowtime,muchig
 
     mucdown=0
     mdcup=0
-    if muc == 1:
+    if muc == 1: # is market up?
         mdcup = 0
-        #mdcup2 = 0
         mucdown = (muchigh - v) / muchigh
-        #muchp = v/lswp - 1  # market cycle up percentage from last low point
         mcudthr = muchigh*(1-mcdp)
 
-    if mdc == 1:
+    if mdc == 1: # is market down?
         mucdown = 0
-        #mucdown2 = 0
         mdcup =  (v - mdclow) / mdclow
-        #mdclp = v/lswp -1   # market cycle down percentage, from last high point ... lswp last high point
         mcudthr = mdclow*(1+mcup)
 
-#    if (n==0 ) and (muc == 1):
-#        mdclow = v
-#        mdclowtime = t
-#    if (n ==0) and (mdc == 1):
-#        muchigh = v
-#        muchightime = t
 
-    if (n==0 ):
+    if (n==0 ): # is this the first analysis day?
         mdclow = v
         mdclowtime = t
         muchigh = v
         muchightime = t
 
-
-    #print('  mdc = ',mdc,'mdclow = ',mdclow , ' muc =', muc,'muchigh =', muchigh)
-
-    if (muc == 1) and v > muchigh:
+    if (muc == 1) and v > muchigh:    ################ market up, new high? #####################
         newmhlm = 1
         mucdown = 0
-        muchigh = v
-        mcudthr = muchigh*(1-mcdp)  # market up cycle down threshold
-        muchightime = t             # time corresponding to this down
-        muclow = v                  # reset the bull low to the bull high
+        mcudthr = muchigh*(1-mcdp)             # market up cycle down threshold
+        muchightime = t                        # time corresponding to this high
+        muchigh = v                            # reset the bull high to v
+        muclow = v                             # reset the bull low to v
         muclowtime = t
-        # print("    ",t, "up", "bullhigh = ",bullhigh, "bulllow =", bulllow, "adjclose =", v, "bullup =", bullup)
 
-    elif (muc == 1) and v < muclow:
+    elif (muc == 1) and (v < muclow):  # has the market fallen?
         mucdown =  (muchigh - v) / muchigh
-        mcudthr = muchigh * (1 - mcdp)
-        #if v < muclow:   # this conditional seems redundant ... fix later  is not needed
+        #mcudthr = muchigh * (1 - mcdp) #rudundent
         muclow = v
         muclowtime = t
-            # switch from up -> down
-        if _mudLogic(mucdown,mcdp):
+
+        if _mudLogic(mucdown,mcdp):   # has the market switched from up to down?
             switch = 1
             mcudthr = mdclow * (1 + mcup)
-            #newmhlm = 1
             muc = 0
             mdc = 1
             mdchigh = v
-            mkt = 1
+            mkt = -1                         # market condition is now negative 
             sp = mdclow
             ep = muchigh
             st = mdclowtime
             et = muchightime
-            #lswp = v
-            #muchp = 0
             mcupm = 0
-            #print("switch = ", 1, "muc to mdc", "mdclow = ", mdclow, "muchigh= ", muclow, ", price = ", v)
             mdclow = v
             mcudthr = mdclow * (1 + mcup)
             mdclowtime = t
-    elif (mdc == 1) and (v < mdclow):
+
+    elif (mdc == 1) and (v < mdclow):   ############## market down,new low?  ###################
         newmhlm = 1
         mdcup=0
-        mdclow = v
-        mcudthr=mdclow*(1+mcup)
-        mkt = -1
-        mdclowtime = t
-        mdchigh = v
+        mcudthr=mdclow*(1+mcup)              # market down cycle low condition
+        mdclowtime = t                       # time corresponding to this down
+        mdclow = v                           # reset the bear low to v
+        mdchigh = v                          # reset the bear high to v
         mdchightime = t
 
-    elif (mdc == 1) and (v > mdclow):   # the second part of this v > mdclow is not needed
-        mcudthr = mdclow * (1 + mcup)
-        if v > mdchigh:    # this could be moved up to the elif
-            mdcup = (v - mdclow) / mdclow
-            mdchigh = v
-            mdchightime = t
-            rbrh=mdchigh
-            rbrht=mdchightime
-        #### switch from down -> up ###
 
-        if _mudLogic(mdcup,mcup) :
-            # print(" bulllow = ", bulllow)
+    elif (mdc == 1) and (v > mdchigh):  # has the market risen?
+        #mcudthr = mdclow * (1 + mcup) # redundent 
+        # this could be moved up to the elif
+        mdcup = (v - mdclow) / mdclow
+        mdchigh = v
+        mdchightime = t
+            #rbrh=mdchigh
+            #rbrht=mdchightime
+
+        if _mudLogic(mdcup,mcup) :  # has the market switched from down to up?
             switch = 1
-
-            #newmhlm = 1
             muc = 1
             mdc = 0
             mdchigh = v
             mdchightime = t
-            mkt = 1
+            mkt = 1                       # market condition is now positive
             sp = muchigh
             ep = mdclow
             st = muchightime
             et = mdclowtime
-            #lswp = v
-            #mdclp=0
             mcupm = 1
-            #print("switch = ", 1, "mdc to muc", "muchigh = ", muchigh, "mdclow = ", mdclow, ", price = ", v)
             muchigh = v
             mcudthr = muchigh * (1 - mcdp)
             muchightime = t

@@ -121,6 +121,12 @@ def fmplot(df,variables,**kwargs):
     # fill between
     fb = kwargs.get('fb','') # fill betweeen tuples
 
+    if startdate == '':
+        startdate=df.index[0]
+
+    if enddate == '':
+        enddate=df.index[df.index.size-1]
+
     if not isinstance(variables, list): 
         variables=[variables]
 
@@ -165,6 +171,9 @@ def fmplot(df,variables,**kwargs):
     if not isinstance(llocs, list): 
         llocs=[llocs]
 
+    if not isinstance(titlexy, list): 
+        titlexy=[titlexy]
+
 
     titlein=[titlein]*len(variables)  
 
@@ -198,7 +207,7 @@ def fmplot(df,variables,**kwargs):
     for variable,ptype,ax,label,loc,ncol,hline,ylim,title,txy,tin,linecolor,an in zip(variables,plottypes,axs,labels,llocs,ncols,hlines,ylims,titles,titlexy,titlein,linecolors,annotations):
 
         # line graph
-        if ptype == 'line':
+        if ptype == 'line' or ptype =='':
 
             # ensure varibles are iterable
             vars=variable
@@ -240,6 +249,9 @@ def fmplot(df,variables,**kwargs):
                     fontsize=fsize, family='serif', style='normal', color=color) # styles are normal, italic, oblique
 
 
+            ax.tick_params(axis='y',labelsize=ytick_labelsize)
+            ax.tick_params(axis='x',labelsize=xtick_labelsize)
+
         # mkt cycle stem plot
         if ptype == 'mktcycle':
             y=_gety_for_fmplot(df,variable,startdate=startdate,enddate=enddate)
@@ -269,7 +281,8 @@ def fmplot(df,variables,**kwargs):
 
             plt.setp(ax, xticks=xticks, xticklabels=xlabels)
 
-
+            ax.tick_params(axis='y',labelsize=ytick_labelsize)
+            ax.tick_params(axis='x',labelsize=xtick_labelsize)
 
             #plt.annotate('Testing\nThis\nOut', xy=(0.5, 0.5), style='normal', color='b', fontsize=12, family='serif')
 
@@ -298,7 +311,7 @@ def fmplot(df,variables,**kwargs):
                     + ' - ' + str(enddate.year)+ '.' + str(enddate.month) + '.'+ str(enddate.day)
         if title != '':
             tx = 0.5
-            ty = 0.9
+            ty = 0.85
             if not tin:
                 ax.set_title(title,fontsize=title_fontsize)
             else:
@@ -311,9 +324,17 @@ def fmplot(df,variables,**kwargs):
             ax.axhline(y=hline, xmin=0.0, xmax=1.0, color='k',lw=1)
 
         if ylim != '':
-            ax.set_ylim([ylims[0],ylims[1]])
+            ax.set_ylim([ylim[0],ylim[1]])
 
-        ax.legend(loc=loc,fontsize=legend_fontsize,markerscale=14)
+
+
+
+
+
+        if loc == '':
+            ax.legend(fontsize=legend_fontsize,markerscale=14)
+        else:
+            ax.legend(loc=loc,fontsize=legend_fontsize,markerscale=14)
 
         
 
@@ -343,9 +364,9 @@ def _getx_for_fmplot(df,**kwargs):
     xticks=[]
     xlabels=[]
 
-    if (enddate.year - startdate.year <=3):
+    if (enddate.year - startdate.year <=10):
         ystep=1
-    elif (enddate.year - startdate.year <=4):
+    elif (enddate.year - startdate.year <=20):
         ystep=2 
     else:
         ystep=5
@@ -404,3 +425,21 @@ def _gety_for_fmplot(df,variable,**kwargs):
     y=df.loc[startdate:enddate,variable].reset_index()[variable].values
 
     return y
+
+
+# US Recessions
+#xhttps://en.wikipedia.org/wiki/List_of_recessions_in_the_United_States
+def get_recessions():
+    recessions=[(dt.datetime(1953,7,1),dt.datetime(1954,5,1)),
+        (dt.datetime(1957,7,1),dt.datetime(1958,4,1)),
+        (dt.datetime(1960,4,1),dt.datetime(1961,2,1)),
+        (dt.datetime(1969,12,1),dt.datetime(1970,11,1)),
+        (dt.datetime(1973,11,1),dt.datetime(1975,3,1)),
+        (dt.datetime(1980,1,1),dt.datetime(1980,7,1)),
+        (dt.datetime(1981,7,1),dt.datetime(1982,11,1)),
+        (dt.datetime(1990,7,1),dt.datetime(1991,3,1)),
+        (dt.datetime(2001,3,1),dt.datetime(2001,11,1)),
+        (dt.datetime(2007,12,1),dt.datetime(2009,6,1)),
+        (dt.datetime(2020,3,1),dt.datetime(2020,4,13))
+      ]
+    return recessions    

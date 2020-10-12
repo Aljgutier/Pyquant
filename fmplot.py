@@ -159,6 +159,10 @@ def fmplot(df,variables,**kwargs):
     if annotations== '' :
         annotations = ['']*len(variables)
 
+
+    if not isinstance(ylims, list): 
+        ylims=[ylims]
+
     if not isinstance(plottypes, list): 
         plottypes=[plottypes]
 
@@ -311,7 +315,7 @@ def fmplot(df,variables,**kwargs):
                     + ' - ' + str(enddate.year)+ '.' + str(enddate.month) + '.'+ str(enddate.day)
         if title != '':
             tx = 0.5
-            ty = 0.85
+            ty = 0.8
             if not tin:
                 ax.set_title(title,fontsize=title_fontsize)
             else:
@@ -325,10 +329,6 @@ def fmplot(df,variables,**kwargs):
 
         if ylim != '':
             ax.set_ylim([ylim[0],ylim[1]])
-
-
-
-
 
 
         if loc == '':

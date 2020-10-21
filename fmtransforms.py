@@ -461,10 +461,6 @@ def dflogretstd(df,v,windows):
         v_lrstd = v + '_lrstd' + str(w)
         df[v_lrstd] = df['logret'].rolling(window=w).std()
 
-        # * np.sqrt(w)
-
-    # returns v_lrstdw
-
     df.drop('logret',axis=1,inplace=True)
     return df
 
@@ -508,7 +504,6 @@ def dfvelocity(df,v,windows=1):
 
 
 def dfadx(df,v_todayClose,v_todayHigh,v_todayLow,window=14):
-    
     v_yesterdayClose='yesterday_closePrice'
     v_yesterdayHigh='yesterday_HighPrice'
     v_yesterdayLow='yesterday_lowPrice'
@@ -585,6 +580,7 @@ def gdpqoq(df,vn_gdp):
     df['gdp_prevqoq']=df['gdp_qoq'].shift(1)
     df['recession1q']=df.apply(lambda row: _gdp_recession1q(row['gdp_qoq']),axis=1)
     df['recession2q']=df.apply(lambda row: _gdp_recession2q(row['gdp_qoq'],row['gdp_prevqoq']),axis=1)
+    df.drop(['gdp_prevq','gdp_prevqoq'],inplace=True,axis=1)
     return df
 
 # Month over Month CPI

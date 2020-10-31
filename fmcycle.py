@@ -8,7 +8,7 @@ import time
 """
 .. module:: fmcycle.py
    :Python version 3.7 or greater
-   :synopsis: derive financial market cycles ("Bull", "Bear") from stock data
+   :synopsis: derive financial market cycles up and down trends ("Bull", "Bear") from stock data
 
 .. moduleauthor:: Alberto Gutierrez <aljgutier@yahoo.com>
 

@@ -44,6 +44,8 @@ def scrape_page(url, header):
      table_tree = lxml.etree.tostring(table[0], method='xml')
      panda = pandas.read_html(table_tree)
      return panda
+     panda = panda.loc[0:99]
+     
 if __name__ == '__main__':
      symbol = 'BB'
      

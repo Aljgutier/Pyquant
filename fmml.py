@@ -27,8 +27,7 @@ from xgboost.sklearn import XGBClassifier
 """
 
 
-def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k=1, model='DT', traindays = 5040,trainsamples=5040,mc=0,
-    smooth=3,trainall=False,posvalue=0,negvalue=1,v=1):
+def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', traindays = 5040,trainsamples=5040,mc=0,trainall=False,posvalue=0,negvalue=1,v=1):
 
     """
 
@@ -41,7 +40,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k=1, model='DT', traindays = 
         dfXY(dataframe): dataframe of independent variable columns, and Y dependent variable column
         y (string): name of the dependent variable
         nday(numeric): predict ndays forward. The pridiction is for ndays forward. If nday = 1, then the prediciton is for the next day. If nday = 2 then the prediiciton is for 2 days forward and so on
-        k(integer): train the model every k days
+        k_model_days(integer): train the model every k_model_days days
         ndayfeatures (list): if nday is a list, then for each n in nday list there is a list of features to align by n (see explanation below)
         traindays(integer): default = 5,040 (20 years). traindays will be reduced to the available days in the dataset (X, and Y) working back from test_et
         trainsamples(integer): default = 5,040 samples, combined with stratified sampling. The actual training samples could be sligtly less than trainsamples to accomodate stratified sampling.
@@ -191,7 +190,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k=1, model='DT', traindays = 
     #############################################################
     # Print some information before training & prediction loop  #
     #############################################################
-    print('train after every k =',k,'days')
+    print('train after every k =',k_model_days,'days')
     print('predict start date =', predict_s.strftime('%Y-%m-%d'))
     print('predict end date = ',predict_e.strftime('%Y-%m-%d'))
     print('train samples requested =', trainsamples)
@@ -326,16 +325,6 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k=1, model='DT', traindays = 
                 print('... train, prev_i =', prev_i.strftime('%Y-%m-%d'))
 
 
-                #clf.fit(X2.as_matrix(), Y2.values.ravel())
-
-#            except ValueError:
-#                e = sys.exc_info()[0]
-#                print("Exception occurred, ValueError")
-##                print(i,last_i)
- #               #print(Y2)
- #               #print(X2)
- #               pass
-
         ####################
         ###### Predict #####
         ####################
@@ -357,7 +346,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k=1, model='DT', traindays = 
 
         #  is it time to retrain?
         kcount += 1
-        if kcount == k:
+        if kcount == k_model_days:
             kcount = 0
 
         # Print diagnostic information 
@@ -405,21 +394,9 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k=1, model='DT', traindays = 
         dfXYTR.loc[dfTR.index[0]:dfTR.index[len(dfTR.index)-1],c]=dfTR.loc[dfTR.index[0]:dfTR.index[len(dfTR.index)-1],c]
 
 
-    #####################################################################
-    ###  Smooth with previous predictions, majority vote              ###
-    ###  amount of smoothing is controlled with the input parameter   ###
-    ###  ks, and placed in the "p_s" variable. See input argument     ###
-    ######################################################################
-#    dfXYTR['p_s']=dfXY['p_1']*2  - 1  # convert variable to be +/- 1
-#    for ks in range(1,smooth):
-#        dfXYTR['p_s']=dfXYTR['p_s']+dfXYTR['p_s'].shift(ks)
-#    dfXYTR.loc[dfXY.p_s > 0 , 'p_s']= 1   # convert back to 0 and 1
-#    dfXYTR.loc[dfXY.p_s < 0 , 'p_s']= 0
-
     dfXYTR['p']=dfXYTR['p_1'].shift(1)
 
-    #dfTR.loc[test_et,'t_1']='NaN'
-    #print ("Training month", i.strftime('%Y-%m-%d'), "train_st = ",train_st, 'train_st2 = ',train_st2)
+
     return dfXYTR, dfTR, clf
 
 ####################################################################################

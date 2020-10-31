@@ -16,8 +16,7 @@ import quandl
 """
 .. module:: fmget.py
     :Python version 3.7 or greater
-    :synopsis: get and manage data from various APIs
-    transforms, plotting, and trading trading strategies
+    :synopsis: functions to get and manage financial and economic data from various APIs
 
 .. moduleauthor:: Alberto Gutierrez <aljgutier@yahoo.com>
 """
@@ -132,6 +131,7 @@ def fred_getappend(Series,start,end,df='',API_KEY_FRED='',save=False,savedir='.'
 
         df = pd.concat([df,dfseries])
         df=df[~df.index.duplicated(keep='first')]
+        df.sort_index(inplace=True, ascending=True)
 
     # save
     if save == True:
@@ -155,44 +155,27 @@ def _peapply(row):
     else:
         return row['PE']
 
+# PE and Eaarnings ... need to get price from dfsp500
 def quandl_sppe_getappend(dfsppe,dfsp500,quandl_api_key, start_date, end_date, save=False,savedir='./'):
 
     data=quandl.get("MULTPL/SP500_PE_RATIO_MONTH", authtoken=quandl_api_key, start_date=start_date, end_date=end_date)
  
-    df_data=pd.DataFrame(data)
-    df_data.columns=['PE']
-    df_sppe=pd.concat([dfsppe,df_data])
-
-    df_sppe=df_sppe[~df_sppe.index.duplicated(keep='first')]
-    df_sppe.sort_index(inplace=True, ascending=True)
-    
-    df_sppe_daily=dfsp500.join(df_sppe,how='left')
-    df_sppe_daily['Earnings']=df_sppe_daily['Close']/df_sppe['PE']
-    df_sppe_daily['Earnings']=df_sppe_daily['Earnings'].ffill()
-    df_sppe_daily['PE']=df_sppe_daily.apply(_peapply,axis=1)
-
-
-    #df_sppe_daily.loc[dt.datetime(2020,7,30):dt.datetime(2020,8,3)]
-    #df_sppe_daily.sort_index(inplace=True, ascending=True)
-    #filename="./data/sp500_sp500_pe_ratio_daily_1950-1-3_to_2020-8-4.csv"
-#df_sppe_daily.to_csv()
-
-
+    pe_data = data=quandl.get("MULTPL/SP500_PE_RATIO_MONTH", authtoken=quandl_api_key)
+    pe_data.columns=["PE"]
+    df_sppe=pe_data.join(df_sp500,how='left')
+    df_sppe.drop(['High','Low','Open','Volume','Adj Close'],axis=1, inplace=True)
+    df_sppe.dropna(how='any',inplace=True)
+    df_sppe['Earnings'] = df_sppe['Close']/df_sppe['PE']
 
     if save==True:
-        s=df_sppe_daily.index[0]
-        e=df_sppe_daily.index[len(df_sppe_daily.index)-1]
-        filename='sp500_pe_daily_'+str(s.year)+'-'+str(s.month)+'-'+str(s.day)
+        s=df_sppe.index[0]
+        e=df_sppe.index[df_sppe.index.size-1]
+        filename='sppe_'+str(s.year)+'-'+str(s.month)+'-'+str(s.day)
         filename=savedir+'/'+filename+'_to_'+str(e.year)+'-'+str(e.month)+'-'+str(e.day)+'.csv'
+        df_sppe.reset_index().to_csv(filename,index=False)
         print("df to csv, filename = ",filename)
 
-
-
-        df_sppe_daily[['PE','Earnings']].reset_index().to_csv(filename,index=False)
-
-
-
-    return df_sppe_daily[['PE','Earnings']]
+    return df_sppe
 
 def yahoo_getappend(symbol,start,end,df='',save=False,savedir='./'):
 

@@ -6,6 +6,15 @@ from pandas.api.types import is_string_dtype
 from pandas.api.types import is_numeric_dtype
 
 
+"""
+.. module:: fmplot.py
+    :Python version 3.7 or greater
+    :synopsis: functions for plotting financial time-series data including sub-plots, line plots, and market cycle (stem) plots.
+
+.. moduleauthor:: Alberto Gutierrez <aljgutier@yahoo.com>
+"""
+
+
 def fmplot(df,variables,**kwargs):
 
     """
@@ -187,8 +196,8 @@ def fmplot(df,variables,**kwargs):
     fig, axs = plt.subplots(nrows=len(variables),ncols=1,figsize=figsize,sharex=sharex,gridspec_kw={'height_ratios': height_ratios})
     fig.subplots_adjust(hspace=hspace, wspace=wspace)
     plt.style.use(pltstyle)
-    plt.tick_params(axis="x",labelsize = xtick_labelsize)
-    plt.tick_params(axis="y",labelsize = ytick_labelsize)
+    #plt.tick_params(axis="x",labelsize = xtick_labelsize)
+    #plt.tick_params(axis="y",labelsize = ytick_labelsize)
 
 
     if not isinstance(axs, np.ndarray): 

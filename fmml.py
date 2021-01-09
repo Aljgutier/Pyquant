@@ -27,7 +27,45 @@ from xgboost.sklearn import XGBClassifier
 """
 
 
-def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', traindays = 5040,trainsamples=5040,mc=0,trainall=False,posvalue=0,negvalue=1,v=1):
+
+def mlalign(dfX, dfY, NshiftFeatures, target_variable ='y' , verbose=True):
+
+    # get column 0 for reference "dummy variable", then drop later
+    dfXaligned=pd.DataFrame(data=dfX[dfX.columns[0]],index=dfX.index)
+    dfYaligned=pd.DataFrame(data=dfY[dfY.columns[0]],index=dfY.index)
+
+    for Nshift, Features in NshiftFeatures:
+        print(Nshift, Features)
+        for feature in Features:
+            aligned_feature = feature + '_n' + str(Nshift-1)
+            dfXaligned[aligned_feature]=dfX[feature].shift(Nshift-1)
+
+    # first column is a dummy so drop it
+    dfXaligned.drop(dfX.columns[0],axis=1,inplace=True)
+
+    # first NshiftMax rows will have nulls due to the shifting ... drop
+    NshiftMax = max([k[0] for k in NshiftFeatures])
+    
+    dfXaligned=dfXaligned.loc[dfXaligned.index[NshiftMax]:]
+    dfYaligned=dfYaligned.loc[dfYaligned.index[NshiftMax]:]
+
+    # shift the target variable ... tomorrow to today ... today will predict tomorrow
+    new_target_variable = target_variable+'_1'
+    dfYaligned[new_target_variable] = dfY[target_variable].shift(-1)
+    dfYaligned.drop(target_variable,axis=1,inplace=True)
+
+    # print some diagnostic info
+    if verbose == True:
+        print('NshiftMax =',NshiftMax)
+        print('X Features = ', list(dfXaligned.columns))
+        display(dfXaligned.tail(3))
+        display(dfYaligned.tail(3))
+
+    return dfXaligned, dfYaligned
+
+
+
+def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainflag='', model='DT',posvalue=0,negvalue=1,v=1):
 
     """
 
@@ -37,15 +75,12 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
 
 
     Args:
-        dfXY(dataframe): dataframe of independent variable columns, and Y dependent variable column
+        dfX(dataframe): dataframe of independent variable columns, 
+        dfY(dataframe): Y dependent variable columns,
         y (string): name of the dependent variable
-        nday(numeric): predict ndays forward. The pridiction is for ndays forward. If nday = 1, then the prediciton is for the next day. If nday = 2 then the prediiciton is for 2 days forward and so on
-        k_model_days(integer): train the model every k_model_days days
-        ndayfeatures (list): if nday is a list, then for each n in nday list there is a list of features to align by n (see explanation below)
-        traindays(integer): default = 5,040 (20 years). traindays will be reduced to the available days in the dataset (X, and Y) working back from test_et
-        trainsamples(integer): default = 5,040 samples, combined with stratified sampling. The actual training samples could be sligtly less than trainsamples to accomodate stratified sampling.
-        test_st(datetime): test start date. The first predicted date.
-        test_et(datetime): test end deate. The last predicted date.
+        predict_s: date of the first prediction. Each prediction is for the next day, for example prediction_s = dt.datetime(2020,11,2) (Monday). the prediction on 11/2, p_1, is a prediction corresponding to market performance on the next day, 11/3.
+        predict_e: last date to make a market prediction. If labeled data exists up to, for example, dt.datetime(2020,11,4), then the last date possible to make a rediction is on 11/4 corresponding predicted market performance on 11/5.
+        modeltrain_ndays(integer): train the model every modeltrain_ndays days. 
         model(string): indicates the type of ML model to use: "DT", "RF", "SVM', "XGB"
         v(integer): Verbosity level. if = 0 some initial diagnostic information is printed, if = 1 print helpful information indicating progress yearly, if = 2, print monthly.
         posvalue(integer): the integer value of a positive detection. Default 0, correpsonding to market down.
@@ -70,25 +105,21 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
 
 
     How does it work?   
-        Example 1
-        Predicting 3 days forward, nday=3. The table below focuses on Day 4. 
-        Predict 3 days forward from Day 1 then Day 4 is the first prediction made
-        with the Day 1, end of day data, X1. 
+        The fmcltraintest() function returns the training results dataframe dfTR, which contains the prediction p_1 (prediction one day forward). 
+        Also returned is the dfXYTR data frame, which is the dfTR dataframe (prediction results) merged back into a composite dataframe containing 
+        ML Features, training labels, and prediction results. The dfXYTR dataframe is useful for analyzing and studying the prediction results 
+        along with the ML Feature set.
 
-        +------------+-----------------+----------------+---------+---------+----------+
-        |  Note      |                 |                |         |         |   Day4   | 
-        +============+=================+================+=========+=========+==========+
-        | EndOfDay   |  X0,t0          | X1,t1          | X2,t2   | X3,t3   |   X4,t4  |
-        +------------+-----------------+----------------+---------+---------+----------+
-        | EndOfDay3  | clf3=fit(X0,t3) | p4=clf3.prd(X1)|         |         |          |
-        +------------+-----------------+----------------+---------+---------+----------+
-        | EndOfDay4  |                 | clf4=fit(X1,t4)|         |         |          |
-        +------------+-----------------+----------------+---------+---------+----------+
-        | Prediction |                 |                |         |         |   p4     |
-        +------------+-----------------+----------------+---------+---------+----------+
+        The model is trained to forecast one day forward. The training and prediction procedure 
+        works as follows. For example, suppose we want a prediction for Wednesday, January 8, 2020. Data preperation is input in dFX and dfY 
+        and are aligned (outside this function) as follows.
+        One set of ML Features per trading day, up to two market days (Monday, January 6) before the prediction. The market results ("labels") 
+        are paired with ML Feature rows. The model is trained to predict one day forward, so the market result (label) from January 7 is paired 
+        with the ML feature row on January 6. The model is trained with supervised learning to predict one day forward, up to January 7. After 
+        the model is trained, the ML features on January 7 (after market close) are input to the model to create buy-sell prediction (classifier output). 
+        The model output predicts, p_1, the *mkt* variable for the close of trading on Wednesday, January 8.
 
-
-
+        For convenience, p_1 is shifted forward by 1 day and becomes the varialbe p
     |
 
 
@@ -122,7 +153,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
     elif model == 'XGB':
 
         #trainndays=1000
-        ne=100
+        #ne=100
         clf = XGBClassifier()
 
     # Support Vector Machine
@@ -161,7 +192,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
 
 
     id_s = dfX.index.searchsorted(predict_s)   # X (i-th row) corresponding to first prediction
-    id_e = dfX.index.searchsorted(predict_e)   # X (i-th row) correspondint to last prediction
+    id_e = dfX.index.searchsorted(predict_e)   # X (i-th row) corresponding to last prediction
 
 
     if dfX.index[id_s] != predict_s:
@@ -190,12 +221,15 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
     #############################################################
     # Print some information before training & prediction loop  #
     #############################################################
-    print('train after every k =',k_model_days,'days')
+    print('train after every k =',modeltrain_ndays,'days')
     print('predict start date =', predict_s.strftime('%Y-%m-%d'))
     print('predict end date = ',predict_e.strftime('%Y-%m-%d'))
-    print('train samples requested =', trainsamples)
+    print('model =',model)
+
+
 
     xysamplesize=dfX.iloc[0:id_s].index.size
+    print('first training sample =',dfX.index[0].strftime('%Y-%m-%d'))
     print('train samples available =',xysamplesize)
     print()
 
@@ -208,14 +242,6 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
 
     # Seperate into Positive and Negative samples DataFrames
 
-    ## shift the ML features 
-
-    dfXY=dfX.join(dfY,lsuffix='x',rsuffix='y')
-    dfXYp = dfXY[dfY[y] == posvalue]
-    dfXYn = dfXY[dfY[y] == negvalue]
-
-
-
 
     #################################################################
     ## initialize variables for the prediction and training loop   ##
@@ -224,105 +250,67 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
 
     year = dfX.index[id_s].year
     month = dfX.index[id_e].month
-    if trainall:
-        trainsamples=xysamplesize
-
+    trainsamples=xysamplesize
     kcount = 0   # train when kcount is = 0
     prev_i= dfX.index[id_s-1] # model training date concurrent with last_i
 
 
+    #if ~isinstance(df_trainflag,pd.DataFrame):
+    #    df_trainflag = pd.DataFrame(dfX.index.size*[False], columns = ['trainflag'], index = dfX.index)
+
+
+    dfXY = dfX.join(dfY, lsuffix ='left', rsuffix = 'right')
+    dfXYp = dfXY[dfXY[y]==posvalue]
+    dfXYn = dfXY[dfXY[y]==negvalue]
 
     #############################
     ## Train and Predict Loop ###
     #############################
+
     for i in dfTR.index:  # i corresponds to  x  index to predict t_n
 
-        if v > 2:
+        if v > 1:
             print('i=',i.strftime('%Y-%m-%d'),'last_i =',last_i.strftime('%Y-%m-%d'))
 
         #dfTR.loc[i,'t_n_date']=dfXY.index[i]
         dfTR.loc[i, 'xtrain_s'] = dfX.index[0]
 
 
-
         #try:            xysamplesize=dfXY.loc[dfXY.index[0]:last_i].index.size
 
-        ######################################
-        # train if kcount has been set to 0  #
-        ######################################
+        ###############################################
+        # train if trainflag is True  or kcount == 0  #
+        ###############################################
+        
+        #print(i, 'trainflag =', df_trainflag.loc[i]['trainflag'], df_trainflag.loc[i]['mucdown'] ,df_trainflag.loc[i]['mdcup'] , 'kcount =', kcount )
         if kcount == 0:
             xysamplesize=dfX.loc[dfX.index[0]:prev_i].index.size
- 
+            trainsamples=xysamplesize
+            psamplesize= dfXYp.loc[dfXYp.index[0]:prev_i].index.size
+            nsamplesize= dfXYn.loc[dfXYn.index[0]:prev_i].index.size
+            samples=xysamplesize
+            samples = xysamplesize
+            psamples = psamplesize
+            nsamples = nsamplesize
 
 
-            if trainall:
-                trainsamples=xysamplesize
-                psamplesize= dfXYp.loc[dfXYp.index[0]:prev_i].index.size
-                nsamplesize= dfXYn.loc[dfXYn.index[0]:prev_i].index.size
-                samples=xysamplesize
+            dfXTrain=dfX.loc[dfX.index[0]:prev_i]    
+            dfYTrain=dfY.loc[dfY.index[0]:prev_i]
 
-            if (trainsamples < xysamplesize):
-
-                ## prepare to create the training dataframe 
-
-                # have an excess of training samples, so need to stratify sample
-
-                # Simple Stratified Sampling .
-
-                #psamplesize = 
-
-                dfXYp2 = dfXYp.loc[dfXY.index[0]:prev_i]
-                dfXYn2 = dfXYn.loc[dfXY.index[0]:prev_i]
-
-                #print(dfXYn2.loc[pd.isnull(dfXYn2).any(1), :].index.values)
-
-
-                samples=trainsamples
-                
-                psamples = psamplesize * trainsamples // (nsamplesize + psamplesize) # integer part of divsion
-                nsamples = samples - psamples
-                dfXYptrain = dfXYp2.sample(psamples)
-                dfXYntrain = dfXYn2.sample(nsamples)
-
-
-                dfXYtrain = pd.concat([dfXYptrain, dfXYntrain])  # concatenate
-                dfXYtrain = dfXYtrain.sample(frac=1) # shuffle the rows
-
- 
-
-                dfXTrain  = dfXYtrain.drop(y,axis=1)
-                dfYTrain  = dfXYtrain[y]
-
-
-
-            else: # use all samples available
-
-                if v > 2:
-                    print("... all training samples")
-
-
-
-                samples = xysamplesize
-                psamples = psamplesize
-                nsamples = nsamplesize
-                
-            
-                dfXTrain=dfX.loc[dfX.index[0]:prev_i]    # start from nday sinde there will be NaN's before
-                dfYTrain=dfY.loc[dfY.index[0]:prev_i]
-
-                #display(dfYTrain.head(5))
-                #display(dfXTrain.head(5))
 
             ########################
             #### Fit the Model #####
             ########################
+
+            
+
             clf.fit(dfXTrain.values, dfYTrain.values.ravel())
             model_date=prev_i
 
 
-            if v > 2:
-
-                print('... train, prev_i =', prev_i.strftime('%Y-%m-%d'))
+            #print('... train',prev_i.strftime('%Y-%m-%d'), 'trainflag =', df_trainflag.loc[prev_i]['trainflag'], 'kcount =', kcount )
+            if v > 1:
+                print('... train',prev_i.strftime('%Y-%m-%d'), 'trainflag =', df_trainflag.loc[prev_i]['trainflag'], 'kcount =', kcount )
 
 
         ####################
@@ -340,14 +328,19 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
         dfTR.loc[i, 'p_1'] = p  # prediction
         dfTR.loc[i,'model_date']=model_date  # model training date 
 
+
+
+
         #########################
         # Loop Housekeeping    ##
         #########################
 
         #  is it time to retrain?
         kcount += 1
-        if kcount == k_model_days:
+
+        if kcount == modeltrain_ndays:
             kcount = 0
+
 
         # Print diagnostic information 
         #  yearly 
@@ -361,16 +354,17 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
                 print_flag = 1
 
         if print_flag == 1:
-                print(i.strftime('%Y-%m-%d'),'train samples requested =', trainsamples,'train samples available =',xysamplesize)
+                print(i.strftime('%Y-%m-%d'),'train samples =',xysamplesize)
                 print('  samples =',trainsamples, 'pos samples =', psamples,'neg samples =', nsamples)
                 print('  pos samplesize =', psamplesize,'neg samplesize =', nsamplesize)
-                (accuracy, precision, recall, fscore, dfcma, dfcmr, tp, fp, tn, fn)=fmclfperformance(dfTR.loc[dfXY.index[0]:i],y,'p_1',v=0)
+                (accuracy, precision, recall, fscore, dfcma, dfcmr, tp, fp, tn, fn)=fmclf       (dfTR.loc[dfXY.index[0]:i],y,'p_1',v=0)
                 print('  accuracy = % 1.3f' %(accuracy))
                 print('  precision (tp /(tp + fp)) = %1.3f' %(precision))
                 print('  recall tp /(tp + fn) = %1.3f' %(recall))
                 print('  fscore = 2*precision*recall / (precision + recall) = %1.3f' %(fscore))
                 print('  tp =', tp,'fp =', fp,'tn =', tn, 'fn =', fn)
 
+                
                 print_flag = 0
 
 
@@ -381,6 +375,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
 
         #### END LOOP ###
 
+   
 
     ##############################################
     ## Put all dfTR variables back into dfXY    ##
@@ -397,7 +392,38 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,k_model_days=1, model='DT', t
     dfXYTR['p']=dfXYTR['p_1'].shift(1)
 
 
+
+    if v==1:
+
+        ### Display the final Predictions
+        display(dfTR[['p_1','y_1','model_date']].tail())
+
+       ### Print final Stats after Loop #### 
+        print(i.strftime('%Y-%m-%d'),'train samples =',xysamplesize)
+        print('  samples =',trainsamples, 'pos samples =', psamples,'neg samples =', nsamples)
+        print('  pos samplesize =', psamplesize,'neg samplesize =', nsamplesize)
+        (accuracy, precision, recall, fscore, dfcma, dfcmr, tp, fp, tn, fn)=fmclfperformance(dfTR.loc[dfXY.index[0]:i],y,'p_1',v=0)
+        print('  accuracy = % 1.3f' %(accuracy))
+        print('  precision (tp /(tp + fp)) = %1.3f' %(precision))
+        print('  recall tp /(tp + fn) = %1.3f' %(recall))
+        print('  fscore = 2*precision*recall / (precision + recall) = %1.3f' %(fscore))
+        print('  tp =', tp,'fp =', fp,'tn =', tn, 'fn =', fn)
+
+
+
+
+
     return dfXYTR, dfTR, clf
+
+
+####################################################################################
+
+def binarysmooth(df, y, NW = 3, y_s='', thr=0.5):
+    y_s = y + '_s' if y_s == '' else y_s
+    df[y_s] = df[y].rolling(NW, min_periods=1).mean()
+    df.loc[df[y_s] >  thr , y_s ] = 1
+    df.loc[df[y_s] <=  thr , y_s ] = 0
+    return df
 
 ####################################################################################
 
@@ -449,7 +475,9 @@ def fmclfperformance(df,tcol,predcol,posvalue=0,negvalue=1,v=1):
     errors  = df[df[tcol]!= df[predcol]]             # errors
     correct = df[df[tcol] == df[predcol]]            # correct
     pos = df[df[tcol] == posvalue].index.size       # positive ... affected with "with cancer" ... down market
-    neg = df[df[tcol] == negvalue].index.size       # true ... up market 
+    neg = df[df[tcol] == negvalue].index.size          # true ... up market 
+    p_pos = df[df[predcol] == posvalue ].index.size     # predicted positive
+    p_neg = df[df[predcol] == negvalue ].index.size    # predicted positive
     samplesize = df.index.size                      # number of samples
     nerrors = errors.index.size                     # number of errors
     ncorrect = correct.index.size                   # number of correct
@@ -462,7 +490,7 @@ def fmclfperformance(df,tcol,predcol,posvalue=0,negvalue=1,v=1):
     tp = correct[correct[tcol] == posvalue].index.size     # true positives
     tn = correct[correct[tcol] == negvalue].index.size     # true negatives
     fn = errors[errors[predcol] == negvalue].index.size    # false negatives
-    fp = errors[errors[predcol] == posvalue].index.size    # false positives
+    fp = errors[errors[predcol] == posvalue].index.size     # false positives
 
 
     
@@ -504,18 +532,20 @@ def fmclfperformance(df,tcol,predcol,posvalue=0,negvalue=1,v=1):
 
 
     # Confusion Matrix Absolute Numbers
-    dfcma=pd.DataFrame({'Predicted Positive':[tp,fp],'Predicted Negative':[fn,tn],'Totals':[pos, neg]}, index=['actual Positive','actual Negative'])
+    dfcma=pd.DataFrame({'Predicted Positive':[tp,fp],'Predicted Negative':[fn,tn],'Totals':[tp+fn, fp+tn]}, index=['actual Positive','actual Negative'])
     # Confusion Matrix Rates
     dfcmr=pd.DataFrame({'Predicted Positive':[tpr,fpr],'Predicted Negative':[fnr,tnr],'Totals': [pos, neg]}, index=['actual Positive','actual Negative'])
 
     # if verbosity, v == 1 then print summary of results
     if v==1:
         display(dfcma)
-        print('posvalue =',posvalue, 'negvalue =',negvalue)
-        print('accuracy =',accuracy)
-        print('precision (tp /(tp + fp))=',precision)
-        print('recall tp /(tp + fn) =',recall)
-        print('fscore = 2*precision*recall / (precision + recall) = ', fscore)
+        print('posvalue = ', posvalue, 'negvalue =',negvalue)
+        print('accuracy = %1.3f' %accuracy)
+        print('errors = %d' %errors.index.size)
+        print('total samples = %d' %df.index.size)
+        print('precision (tp /(tp + fp))= %1.3f' %precision)
+        print('recall tp /(tp + fn) = %1.3f' %recall)
+        print('fscore = 2*precision*recall / (precision + recall) =  %1.3f' %fscore)
         print('tp =', tp,'fp =', fp,'tn =', tn, 'fn =', fn)
     
 
@@ -578,7 +608,6 @@ def fmbacktest(df,price_variable,tradesignal):
     dftsummary = pd.DataFrame(index=range(startyr, endyr))
 
 
-
     # variable name strings
     r = 'r'
     r_strategy = 'r_strategy'
@@ -630,15 +659,15 @@ def fmbacktest(df,price_variable,tradesignal):
     Rc_strat = dftsummary.loc[endyr, endstrategyvalue] / dftsummary.loc[
         startyr, startstrategyvalue] - 1   # total regurn strategy 
 
-    Ra = ((Rc + 1) ** (1 / n)) - 1 # anualized return for price_variable
-    Ra_strat = ((Rc_strat + 1) ** (1 / n)) - 1 # anualized return for strategy
+    #Ra = ((Rc + 1) ** (1 / n)) - 1 # anualized return for price_variable
+    #Ra_strat = ((Rc_strat + 1) ** (1 / n)) - 1 # anualized return for strategy
 
 
-    d={ 'nyear':n,  'Ra': Ra,'Ra_strat': Ra_strat,'Rc': Rc,'Rc_strat': Rc_strat}
+    d={ 'nyear':n, 'Rc': Rc,'Rc_strat': Rc_strat}
     dfreturns=pd.DataFrame(d,index=[end_date])  # annualized returns
 
 
-    return dftsummary, dfreturns, dft
+    return dftsummary,  dft
 
 
 # Trade Returns

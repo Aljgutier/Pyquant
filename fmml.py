@@ -357,7 +357,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
                 print(i.strftime('%Y-%m-%d'),'train samples =',xysamplesize)
                 print('  samples =',trainsamples, 'pos samples =', psamples,'neg samples =', nsamples)
                 print('  pos samplesize =', psamplesize,'neg samplesize =', nsamplesize)
-                (accuracy, precision, recall, fscore, dfcma, dfcmr, tp, fp, tn, fn)=fmclf       (dfTR.loc[dfXY.index[0]:i],y,'p_1',v=0)
+                (accuracy, precision, recall, fscore, dfcma, dfcmr, tp, fp, tn, fn)=fmclfperformance(dfTR.loc[dfXY.index[0]:i],y,'p_1',v=0)
                 print('  accuracy = % 1.3f' %(accuracy))
                 print('  precision (tp /(tp + fp)) = %1.3f' %(precision))
                 print('  recall tp /(tp + fn) = %1.3f' %(recall))

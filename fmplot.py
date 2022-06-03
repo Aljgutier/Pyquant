@@ -29,8 +29,10 @@ def fmplot(df,variables,**kwargs):
     **Kwargs**: 
         
         **df** (dataframe): input data frame containing the variables (columns) to be plotted. The df.index must be in datatime.
+        
+        **fb** (datetime_1,datetime_2): fill between two datetime horizontal values. For example, gray recession periods
 
-        **variables** (string): a string indicating the variable (i.e., column) to be plotted. If variabes is a list, then an axis will be created for each variable. Variables can be a list of lists, in which case each sublist corresponds to the variables to be plotted by the corresponding axis.
+        **variables** (string): a string indicating the variable (i.e., column) to be plotted. If variabes is a list, then an axis will be created for each variable. Variables can be a list of lists, in which case each sublist corresponds to the variables to be plotted on the corresponding axis.
 
         **startdate** (datetime): the start date (x-axis) for all axis. The default is the first date in the df.index.
 
@@ -68,6 +70,8 @@ def fmplot(df,variables,**kwargs):
 
         **hlines** (numeric): draw horizontal line at y value = hlines for axis. Default is '' indicating no line. For a multi-plot (multiple axis) hlines is a list with multiple numeric values or '' indicating no line for the corresponding axis. 
 
+        **vlines** (numeric): draw vertical line at (x_dt:datetimes,...) vlines for axis. Default is '' indicating no line. For a multi-plot (multiple axis) vlines is a list with multiple numeric values or '' indicating no line for the corresponding axis. 
+        
         **xaxis_fontsize** (numeric): x-axis label font size
 
         **yaxis_fontsize** (numeric): y-axis label font size
@@ -97,6 +101,7 @@ def fmplot(df,variables,**kwargs):
     """
     pltstyle = kwargs.get('pltstyle', 'seaborn')
     hlines = kwargs.get('hlines','')
+    vlines = kwargs.get('vlines','')
     figsize = kwargs.get('figsize', (18,9))
     plottypes = kwargs.get('plottypes', '')
     linecolors = kwargs.get('linecolors', '')
@@ -109,7 +114,7 @@ def fmplot(df,variables,**kwargs):
     labels = kwargs.get('labels', '')
     llocs = kwargs.get('llocs','')
     ncols = kwargs.get('ncols','')
-    ylims = kwargs.get('ylims','')                      # list of two-tuples ylims (lower, upper)
+    ylims = kwargs.get('ylims','')                    # list of two-tuples ylims (lower, upper)
     figsize = kwargs.get('figsize', [24,12])
     stemlw = kwargs.get('stemlw', 2)
     wspace = kwargs.get('wspace',0.1)
@@ -123,6 +128,10 @@ def fmplot(df,variables,**kwargs):
     title_fontsize= kwargs.get('title_fontsize',14)
     legend_fontsize= kwargs.get('legend_fontsize',12)
     annotations= kwargs.get('annotations','')
+    xlabel=kwargs.get('xlabel','')
+    xlabelloc=kwargs.get('xlabelloc','')
+    xlabelfontsize=kwargs.get('xlabelfontsize',14)
+
 
 
     # process Kwargs turn into lists if necessary
@@ -147,14 +156,22 @@ def fmplot(df,variables,**kwargs):
 
     if titles == '' :
         titles = ['']*len(variables)
+
     if llocs == '' :
         llocs = ['upper left']*len(variables)
+
     if ncols == '' :
         ncols = [1]*len(variables)
+
     if hlines == '' :
         hlines=['']*len(variables)
+        
+    if vlines == '' :
+        vlines=['']*len(variables)
+
     if ylims == '' :
         ylims=['']*len(variables)
+
 
     if labels=='':
         labels=variables
@@ -167,7 +184,6 @@ def fmplot(df,variables,**kwargs):
 
     if annotations== '' :
         annotations = ['']*len(variables)
-
 
     if not isinstance(ylims, list): 
         ylims=[ylims]
@@ -187,15 +203,14 @@ def fmplot(df,variables,**kwargs):
     if not isinstance(titlexy, list): 
         titlexy=[titlexy]
 
-
     titlein=[titlein]*len(variables)  
 
 
     # create axis
-
+    plt.style.use(pltstyle)
     fig, axs = plt.subplots(nrows=len(variables),ncols=1,figsize=figsize,sharex=sharex,gridspec_kw={'height_ratios': height_ratios})
     fig.subplots_adjust(hspace=hspace, wspace=wspace)
-    plt.style.use(pltstyle)
+
     #plt.tick_params(axis="x",labelsize = xtick_labelsize)
     #plt.tick_params(axis="y",labelsize = ytick_labelsize)
 
@@ -217,9 +232,10 @@ def fmplot(df,variables,**kwargs):
             fb2.append((f0,f1))
 
     # plot variables on each axis according to the plot type
-    for variable,ptype,ax,label,loc,ncol,hline,ylim,title,txy,tin,linecolor,an in zip(variables,plottypes,axs,labels,llocs,ncols,hlines,ylims,titles,titlexy,titlein,linecolors,annotations):
 
+    for variable,ptype,ax,label,loc,ncol,hline,vline,ylim,title,txy,tin,linecolor,an in zip(variables,plottypes,axs,labels,llocs,ncols,hlines,vlines,ylims,titles,titlexy,titlein,linecolors,annotations):
         # line graph
+        
         if ptype == 'line' or ptype =='':
 
             # ensure varibles are iterable
@@ -236,9 +252,8 @@ def fmplot(df,variables,**kwargs):
                 cs = [cs]*len(vars)
 
             # loop through variables for this axis
-
             for v,l,c in zip(vars,labs,cs):
-
+     
                 y=_gety_for_fmplot(df,v,startdate=startdate,enddate=enddate)
 
                 if (c != '') :
@@ -250,20 +265,17 @@ def fmplot(df,variables,**kwargs):
 
             if an != '':
                 for a in an:
-                    x=xindex.get_loc(a[0],method='nearest')
+                    x_an=xindex.get_loc(a[0],method='nearest')
                     #x=t[0]*xindex.sized
                     color = 'b'
                     fsize = 12
-                    if len(a)==4:
+                    if len(a)>=4:
                         color = a[3]
                     if len(a)==5:
                         fsize=a[4]
-                    plt.annotate(a[2],xy=(x,a[1]), ha='left', rotation=0, wrap=True, 
+                    
+                    ax.annotate(a[2],xy=(x_an,a[1]), ha='left', rotation=0, wrap=True, 
                     fontsize=fsize, family='serif', style='normal', color=color) # styles are normal, italic, oblique
-
-
-            ax.tick_params(axis='y',labelsize=ytick_labelsize)
-            ax.tick_params(axis='x',labelsize=xtick_labelsize)
 
         # mkt cycle stem plot
         if ptype == 'mktcycle':
@@ -301,17 +313,19 @@ def fmplot(df,variables,**kwargs):
 
             if an != '':
                 for a in an:
-                    x=xindex.get_loc(a[0],method='nearest')
+                    x_an=xindex.get_loc(a[0],method='nearest')
                     #x=t[0]*xindex.size
                     color = 'b'
                     fsize = 12
-                    if len(a)==4:
+                    if len(a)>=4:
                         color = a[3]
                     if len(a)==5:
                         fsize=a[4]
+                    
 
-                    plt.annotate(a[2],xy=(x,a[1]), ha='left', rotation=0, wrap=True, 
+                    ax.annotate(a[2],xy=(x_an,a[1]), ha='left', rotation=0, wrap=True, 
                     fontsize=fsize, family='serif', style='normal', color=color) # styles are normal, italic, oblique
+
 
         # post loop parameters that apply to all types of graphs
         # fill between
@@ -335,9 +349,15 @@ def fmplot(df,variables,**kwargs):
 
         if hline != '':
             ax.axhline(y=hline, xmin=0.0, xmax=1.0, color='k',lw=1)
+            
+        if vline != '':
+            for vl in vline:
+                x_dt=xindex.get_loc(vl,method='nearest')
+                ax.axvline(x=x_dt, ymin=0, ymax=1, color='k',lw=1)
 
         if ylim != '':
             ax.set_ylim([ylim[0],ylim[1]])
+
 
 
         if loc == '':
@@ -345,7 +365,17 @@ def fmplot(df,variables,**kwargs):
         else:
             ax.legend(loc=loc,fontsize=legend_fontsize,markerscale=14)
 
-        
+    if xlabel != '':
+        if xlabelloc == '':
+            xy = (0,-0.2)
+        else:
+            xy =(xlabelloc[0],xlabelloc[1])
+        if xlabelfontsize =='':
+            xlabelfontsize = 14
+        ax.annotate(xlabel, xy=xy , xycoords='axes fraction', fontsize=xlabelfontsize)
+
+    ax.tick_params(axis='y',labelsize=ytick_labelsize)
+    ax.tick_params(axis='x',labelsize=xtick_labelsize)
 
     plt.show()
 

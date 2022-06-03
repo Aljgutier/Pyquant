@@ -217,6 +217,8 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
     dfTR.loc[dfY.index[id_s]:dfY.index[id_e],y] = dfY.loc[dfY.index[id_s]:dfY.index[id_e],y]
     dfTR['p_1'] = [np.NAN] * dfTR.index.size   # predictions default to NaN
 
+    #print('hello')
+    #display(dfTR.tail(5))
 
     #############################################################
     # Print some information before training & prediction loop  #
@@ -296,6 +298,10 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
 
             dfXTrain=dfX.loc[dfX.index[0]:prev_i]    
             dfYTrain=dfY.loc[dfY.index[0]:prev_i]
+            
+            #print(prev_i)
+            #display(dfYTrain.tail(1))
+            
 
 
             ########################
@@ -325,6 +331,8 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
             print('... predict, i =', i.strftime('%Y-%m-%d') ,'p=',p[0])
             print()
         
+        
+        #print(f'i={i} , p_1 ={p}, model_date = {model_date}')
         dfTR.loc[i, 'p_1'] = p  # prediction
         dfTR.loc[i,'model_date']=model_date  # model training date 
 
@@ -375,7 +383,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
 
         #### END LOOP ###
 
-   
+    #display(dfYTrain.tail())
 
     ##############################################
     ## Put all dfTR variables back into dfXY    ##

@@ -162,7 +162,7 @@ def quandl_sppe_getappend(dfsppe,dfsp500,quandl_api_key, start_date, end_date, s
  
     pe_data = data=quandl.get("MULTPL/SP500_PE_RATIO_MONTH", authtoken=quandl_api_key)
     pe_data.columns=["PE"]
-    df_sppe=pe_data.join(df_sp500,how='left')
+    df_sppe=pe_data.join(dfsp500,how='left')
     df_sppe.drop(['High','Low','Open','Volume','Adj Close'],axis=1, inplace=True)
     df_sppe.dropna(how='any',inplace=True)
     df_sppe['Earnings'] = df_sppe['Close']/df_sppe['PE']

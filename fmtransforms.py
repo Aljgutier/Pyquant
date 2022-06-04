@@ -361,6 +361,109 @@ def gdprecession(df, vn_gdp):
     df.drop(['gdp_prevq','gdp_prevqoq'],inplace=True,axis=1)
     return df
 
+
+
+
+# Market Low Anticipation and low to high Reaction
+def _market_sell_anticipation(row,df):
+    # days before market low to get back in market
+    
+    Anticipation_Low=df.loc[row['Date_Sell']:row['Date_Mkt_Low']].index.size -1
+    
+    return Anticipation_Low
+
+def _market_buy_anticipation(row,df):
+    # days from market low to get back in market
+    
+    Reaction_LowHigh=df.loc[row['Date_Mkt_Low']:row['Date_Buy']].index.size -1
+    
+    return Reaction_LowHigh
+
+
+def market_anticipation(df,p='p_s',p_1='p_s_1', Close='Close',mkt='mkt', t1=dt.datetime(1960,1,1),
+                        verbose=False):
+    # anticipataton of market after market prediction
+    # sell date ... prior to market bottom
+    # buy date ... after market bottom
+    
+    dfa = df[[Close,mkt,p,p_1]].copy()
+    dfa['mkt_1'] = dfa['mkt'].shift(-1)
+    mkt_1 = 'mkt_1'
+    a10 = 'a10'
+    a01 = 'a01'
+    m01 = 'm01'
+    m10 = 'm10'
+    
+    # ps = 0,1  down market, up market ... smoothed prediction
+    # mkt = -1, 1  down market, up market
+
+
+    #create variables for anticipation of down and up markets
+    dfa[m10] = (dfa[mkt] == 1 ) & (dfa[mkt_1]==-1)
+    dfa[a10] = (dfa[p] == 1 ) & (dfa[p_1]==0)
+    dfa[m01] = (dfa[mkt] == -1 ) & (dfa[mkt_1]==1)
+    dfa[a01] = (dfa[p] == 0 ) & (dfa[p_1]==1)
+
+    dfa = dfa[[Close,mkt,mkt_1,p,p_1,m10,m01,a01,a10]] # order columns for convenience
+    dfa=dfa.loc[t1:] # start on up market 1960 by default
+    
+
+    # keep only market changes and anticipation changes
+    dfa['keep'] = (dfa[m10] | dfa[a10] | dfa[m01] | dfa[a01] )
+    dfa = dfa[dfa['keep']]
+    dfa.drop('keep',axis=1,inplace=True)
+    
+
+    
+    if verbose == True:
+        print('dfa with market anticipation variables')
+        display(dfa.head())
+        
+    # keep days where mkt -1 -> 1, mkt 1 > -1, ps  0 -> 1 , ps 1 -> 0
+    
+    # Consolidate Hith to Low to High Market ... 4 rows into 1
+    # rows come in groups of 4 ... 
+    #  1 mkt turns from Bull to Bear
+    #  2 ps (smooth) prediction turns from Bull to Bear
+    #  3 mket turns from Bear to Bull
+    #  4 ps (smooth) prediction turns fro Bear to BUll
+
+
+    dfa = dfa.reset_index()
+    dfa['Date_Mkt_High']=dfa['date'] # market high at close of business
+    dfa['Date_Sell']=dfa['date'].shift(-1)   # sell signal close of bus prediction for next day ... out of market by next morn
+    dfa['Date_Mkt_Low']=dfa['date'].shift(-2) # market low at close of business
+    dfa['Date_Buy']=dfa['date'].shift(-3)  # buy signal forward predict for next day, buy by morning
+
+    dfa['Mkt_High_Price'] = dfa['Close']
+    dfa['Sell_Price'] = dfa['Close'].shift(-1)
+    dfa['Mkt_Low_Price'] = dfa['Close'].shift(-2)
+    dfa['Buy_Price'] = dfa['Close'].shift(-3)
+
+    dfa = dfa[(dfa[mkt]==1 ) & (dfa[mkt_1]==-1)] # keep only rows with a market cycle
+
+
+    # sell at the end of day
+    # buy at the end of day, at market open
+    cols=['Date_Mkt_High', 'Date_Sell','Date_Mkt_Low','Date_Buy','Mkt_High_Price','Sell_Price','Mkt_Low_Price','Buy_Price']
+    dfa=dfa[cols]
+
+    if verbose == True:
+        print('market cycles with anticipation points - market high, sell (get out of market) , market low, buy - (get back into market)')
+        display(dfa)
+    
+    
+    # sell signal - days before market low
+    # buy signal - days from market low
+
+    dfa['Anticipation_Sell'] = dfa.apply(lambda row: _market_sell_anticipation(row,df), axis=1 )
+    dfa['Anticipation_Buy'] = dfa.apply(lambda row: _market_buy_anticipation(row,df), axis=1 )
+
+    dfa=dfa.reset_index(drop=True)
+    
+    
+    return dfa
+
 # Month over Month CPI
 
 #def csentmom(df,v,window=3):

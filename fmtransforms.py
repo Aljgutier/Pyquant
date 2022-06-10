@@ -379,24 +379,33 @@ def _market_buy_anticipation(row,df):
     
     return Reaction_LowHigh
 
+def _days_out_of_market(row,df):
+    # days out of market
+    
+    out_of_market=df.loc[row['Date_Sell']:row['Date_Buy']].index.size -1
+    return out_of_market
 
-def market_anticipation(df,p='p_s',p_1='p_s_1', Close='Close',mkt='mkt', t1=dt.datetime(1960,1,1),
+
+def market_anticipation(df,p_1='p_s_1', Close='Close',mkt='mkt', t1=dt.datetime(1960,1,1),
                         verbose=False):
+    # 
     # anticipataton of market after market prediction
     # sell date ... prior to market bottom
     # buy date ... after market bottom
     
-    dfa = df[[Close,mkt,p,p_1]].copy()
-    dfa['mkt_1'] = dfa['mkt'].shift(-1)
+
+    p=p_1 + '_m1'
     mkt_1 = 'mkt_1'
     a10 = 'a10'
     a01 = 'a01'
     m01 = 'm01'
     m10 = 'm10'
-    
+    dfa = df[[Close,mkt,p_1]].copy() 
+    dfa[p] = dfa[p_1].shift(-1)
+    dfa['mkt_1'] = dfa['mkt'].shift(-1)
+
     # ps = 0,1  down market, up market ... smoothed prediction
     # mkt = -1, 1  down market, up market
-
 
     #create variables for anticipation of down and up markets
     dfa[m10] = (dfa[mkt] == 1 ) & (dfa[mkt_1]==-1)
@@ -439,14 +448,12 @@ def market_anticipation(df,p='p_s',p_1='p_s_1', Close='Close',mkt='mkt', t1=dt.d
     dfa['Sell_Price'] = dfa['Close'].shift(-1)
     dfa['Mkt_Low_Price'] = dfa['Close'].shift(-2)
     dfa['Buy_Price'] = dfa['Close'].shift(-3)
+    dfa['Gain-Loss'] = dfa['Sell_Price'] - dfa['Buy_Price']
+    dfa['Buy_Price'] = dfa['Close'].shift(-3)
+    dfa['Gain_Loss'] = dfa['Sell_Price'] - dfa['Buy_Price']
+    dfa['Percent_Gain_Loss'] = dfa['Gain_Loss'] / dfa['Sell_Price']
 
     dfa = dfa[(dfa[mkt]==1 ) & (dfa[mkt_1]==-1)] # keep only rows with a market cycle
-
-
-    # sell at the end of day
-    # buy at the end of day, at market open
-    cols=['Date_Mkt_High', 'Date_Sell','Date_Mkt_Low','Date_Buy','Mkt_High_Price','Sell_Price','Mkt_Low_Price','Buy_Price']
-    dfa=dfa[cols]
 
     if verbose == True:
         print('market cycles with anticipation points - market high, sell (get out of market) , market low, buy - (get back into market)')
@@ -457,12 +464,59 @@ def market_anticipation(df,p='p_s',p_1='p_s_1', Close='Close',mkt='mkt', t1=dt.d
     # buy signal - days from market low
 
     dfa['Anticipation_Sell'] = dfa.apply(lambda row: _market_sell_anticipation(row,df), axis=1 )
-    dfa['Anticipation_Buy'] = dfa.apply(lambda row: _market_buy_anticipation(row,df), axis=1 )
+    dfa['Reaction_Buy'] = dfa.apply(lambda row: _market_buy_anticipation(row,df), axis=1 )
+    dfa['Out_Of_Market'] = dfa.apply(lambda row: _days_out_of_market(row,df), axis=1 )
 
+
+    cols=['Date_Mkt_High', 'Date_Sell','Date_Mkt_Low','Date_Buy','Mkt_High_Price','Sell_Price','Mkt_Low_Price','Buy_Price',
+          'Gain_Loss','Percent_Gain_Loss', 'Anticipation_Sell','Reaction_Buy','Out_Of_Market' ]
+   
+   
+    dfa=dfa[cols]
     dfa=dfa.reset_index(drop=True)
     
-    
     return dfa
+
+def bear_buysell_summary(df_anticipation, date_mkt_high, 
+                         date_market_high_col = 'Date_Mkt_High',
+                         market_high_price_col = 'Mkt_High_Price',
+                         date_sell_col = "Date_Sell",
+                         sell_price_col = "Sell_Price",
+                         date_market_low_col ='Date_Mkt_Low',
+                         market_low_price_col = 'Mkt_Low_Price',
+                         date_buy_col = 'Date_Buy',
+                         buy_price_col = 'Buy_Price',
+                         anticipation_sell_col = 'Anticipation_Sell',
+                         reaction_buy_col = 'Reaction_Buy'
+                        ):
+    
+    df_mcycle = df_anticipation[df_anticipation[date_market_high_col]==date_mkt_high]
+    
+    d1=df_mcycle[date_market_high_col].values[0]
+    d1=pd.to_datetime(d1)
+    d1=d1.strftime("%Y-%m-%d")
+    p1=df_mcycle[market_high_price_col].values[0]
+    
+    d2=df_mcycle[date_sell_col].values[0]
+    d2=pd.to_datetime(d2)
+    d2=d2.strftime("%Y-%m-%d")
+    p2=df_mcycle[sell_price_col].values[0]
+    
+    d3=df_mcycle[date_market_low_col].values[0]
+    d3=pd.to_datetime(d3)
+    d3=d3.strftime("%Y-%m-%d")
+    p3=df_mcycle[market_low_price_col].values[0]
+    
+    d4=df_mcycle[date_buy_col].values[0]
+    d4=pd.to_datetime(d4)
+    d4=d4.strftime("%Y-%m-%d")
+    p4=df_mcycle[buy_price_col].values[0]
+    
+    anticipation_sell=df_mcycle['Anticipation_Sell'].values[0]
+    reaction_buy=df_mcycle['Reaction_Buy'].values[0]
+    
+
+    return df_mcycle,d1,p1, d2, p2, d3, p3, d4, p4, anticipation_sell, reaction_buy
 
 # Month over Month CPI
 

@@ -19,7 +19,7 @@ from xgboost.sklearn import XGBClassifier
 
 
 """
-.. module:: finmktml.py
+.. module:: fmml.py
    :Python version 3.7 or greater
    :synopsis: Fin Market Machine Learning helpers and wrappers
 
@@ -65,7 +65,8 @@ def mlalign(dfX, dfY, NshiftFeatures, target_variable ='y' , verbose=True):
 
 
 
-def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainflag='', model='DT',posvalue=0,negvalue=1,v=1):
+def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, last_training_date='', 
+                   model='DT',posvalue=0,negvalue=1,clf_model = '', v=1):
 
     """
 
@@ -83,6 +84,7 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
         modeltrain_ndays(integer): train the model every modeltrain_ndays days. 
         model(string): indicates the type of ML model to use: "DT", "RF", "SVM', "XGB"
         v(integer): Verbosity level. if = 0 some initial diagnostic information is printed, if = 1 print helpful information indicating progress yearly, if = 2, print monthly.
+        last_training_date: do not train after this date. For example, there may no longer be valid mkt truth variable past a certain date. 
         posvalue(integer): the integer value of a positive detection. Default 0, correpsonding to market down.
         negvalue(integer): the integer value of a negative detection. Default 1, corresponding to market up.
 
@@ -91,9 +93,9 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
         Training results dataframe dfTR from test_st to test_et and the classifier clf. 
         dfTR columns include the following   
         
-            dfTR columns include 
+            dfTR training results dataframe (see below)
 
-            dfXY: all the columns from the dfXY input dataframe
+            dfXYTR: all the columns from the dfXY input dataframe (see below)
 
             t: true 1 up or 0 down market indicator  
 
@@ -217,8 +219,6 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
     dfTR.loc[dfY.index[id_s]:dfY.index[id_e],y] = dfY.loc[dfY.index[id_s]:dfY.index[id_e],y]
     dfTR['p_1'] = [np.NAN] * dfTR.index.size   # predictions default to NaN
 
-    #print('hello')
-    #display(dfTR.tail(5))
 
     #############################################################
     # Print some information before training & prediction loop  #
@@ -227,13 +227,9 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
     print('predict start date =', predict_s.strftime('%Y-%m-%d'))
     print('predict end date = ',predict_e.strftime('%Y-%m-%d'))
     print('model =',model)
-
-
-
     xysamplesize=dfX.iloc[0:id_s].index.size
     print('first training sample =',dfX.index[0].strftime('%Y-%m-%d'))
     print('train samples available =',xysamplesize)
-    print()
 
 
     ###################################################################
@@ -249,16 +245,12 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
     ## initialize variables for the prediction and training loop   ##
     #################################################################
 
-
     year = dfX.index[id_s].year
     month = dfX.index[id_e].month
     trainsamples=xysamplesize
     kcount = 0   # train when kcount is = 0
-    prev_i= dfX.index[id_s-1] # model training date concurrent with last_i
-
-
-    #if ~isinstance(df_trainflag,pd.DataFrame):
-    #    df_trainflag = pd.DataFrame(dfX.index.size*[False], columns = ['trainflag'], index = dfX.index)
+    prev_i= dfX.index[id_s-1] # model training date concurrent with previous i (index)
+    print(f'last training sample, first model = {prev_i.strftime("%Y-%m-%d")}, including data from first training sample {dfX.index[0].strftime("%Y-%m-%d")}')
 
 
     dfXY = dfX.join(dfY, lsuffix ='left', rsuffix = 'right')
@@ -267,33 +259,36 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
 
     #############################
     ## Train and Predict Loop ###
-    #############################
+    #############################'
+    
+    gt_last_train_date_flag=True
+    
+    do_not_train_flag=False
+    if clf_model != '':
+        do_not_train_flag == True
+        clf = clf_model
 
     for i in dfTR.index:  # i corresponds to  x  index to predict t_n
 
         if v > 1:
             print('i=',i.strftime('%Y-%m-%d'),'last_i =',last_i.strftime('%Y-%m-%d'))
 
-        #dfTR.loc[i,'t_n_date']=dfXY.index[i]
         dfTR.loc[i, 'xtrain_s'] = dfX.index[0]
 
-
-        #try:            xysamplesize=dfXY.loc[dfXY.index[0]:last_i].index.size
-
-        ###############################################
-        # train if trainflag is True  or kcount == 0  #
-        ###############################################
+        if last_training_date != '':
+            if prev_i > last_training_date:
+                gt_last_train_date_flag=False
         
-        #print(i, 'trainflag =', df_trainflag.loc[i]['trainflag'], df_trainflag.loc[i]['mucdown'] ,df_trainflag.loc[i]['mdcup'] , 'kcount =', kcount )
-        if kcount == 0:
+        if kcount == 0 and gt_last_train_date_flag==True and do_not_train_flag == False:
             xysamplesize=dfX.loc[dfX.index[0]:prev_i].index.size
             trainsamples=xysamplesize
             psamplesize= dfXYp.loc[dfXYp.index[0]:prev_i].index.size
             nsamplesize= dfXYn.loc[dfXYn.index[0]:prev_i].index.size
-            samples=xysamplesize
+            #samples=xysamplesize
             samples = xysamplesize
             psamples = psamplesize
             nsamples = nsamplesize
+
 
 
             dfXTrain=dfX.loc[dfX.index[0]:prev_i]    
@@ -309,14 +304,13 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
             ########################
 
             
-
             clf.fit(dfXTrain.values, dfYTrain.values.ravel())
             model_date=prev_i
 
 
-            #print('... train',prev_i.strftime('%Y-%m-%d'), 'trainflag =', df_trainflag.loc[prev_i]['trainflag'], 'kcount =', kcount )
+            #print('... train',prev_i.strftime('%Y-%m-%d'), 'kcount =', kcount )
             if v > 1:
-                print('... train',prev_i.strftime('%Y-%m-%d'), 'trainflag =', df_trainflag.loc[prev_i]['trainflag'], 'kcount =', kcount )
+                print('... train',prev_i.strftime('%Y-%m-%d'), 'kcount =', kcount )
 
 
         ####################
@@ -324,19 +318,16 @@ def fmclftraintest(dfX,dfY,y, predict_s, predict_e,modeltrain_ndays=1, df_trainf
         ####################
 
 
-        p = clf.predict(dfX.loc[i].values.reshape(1,-1))  # get a new row of data 
-
+        p_1 = clf.predict(dfX.loc[i].values.reshape(1,-1))  # get a new row of data 
 
         if v > 2:
-            print('... predict, i =', i.strftime('%Y-%m-%d') ,'p=',p[0])
+            print('... predict, i =', i.strftime('%Y-%m-%d') ,'p=',p_1[0])
             print()
         
         
         #print(f'i={i} , p_1 ={p}, model_date = {model_date}')
-        dfTR.loc[i, 'p_1'] = p  # prediction
+        dfTR.loc[i, 'p_1'] = p_1  # prediction
         dfTR.loc[i,'model_date']=model_date  # model training date 
-
-
 
 
         #########################
